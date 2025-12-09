@@ -4,7 +4,8 @@ import { Activity, Star, ArrowRight, Shield, Zap, Layout, Menu, X, Check } from 
 import { motion } from 'framer-motion';
 
 // Helper to convert style preset to classes
-const getPresetClasses = (preset: ThemeConfig['stylePreset'], isDark: boolean) => {
+// Added primaryColor to allow dynamic shadows for Macaron/Jelly styles
+const getPresetClasses = (preset: ThemeConfig['stylePreset'], isDark: boolean, primaryColor: string) => {
     switch (preset) {
         case 'glass':
             return {
@@ -14,6 +15,23 @@ const getPresetClasses = (preset: ThemeConfig['stylePreset'], isDark: boolean) =
                 container: isDark 
                     ? 'bg-gradient-to-br from-gray-900 via-purple-900 to-black' 
                     : 'bg-gradient-to-br from-blue-400 via-purple-300 to-pink-300'
+            };
+        case 'macaron':
+            return {
+                // Jelly/Macaron Card:
+                // 1. bg-white/70: Milky transparency
+                // 2. backdrop-blur-md: Frosted effect
+                // 3. shadow-[...]: Colored glow (primaryColor) + White inner highlight (inset) for convexity
+                card: `border-2 border-white/80 backdrop-blur-md ${isDark 
+                    ? 'bg-gray-800/60 shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] text-white' 
+                    : `bg-white/70 shadow-[8px_8px_24px_${primaryColor}20,inset_2px_2px_4px_rgba(255,255,255,0.9),inset_-2px_-2px_4px_${primaryColor}05] text-gray-800`}`,
+                
+                // Q-bouncy button with stronger shine
+                button: `transition-all hover:-translate-y-1 active:translate-y-0 active:scale-95 border-2 border-white/50 ${isDark 
+                    ? 'shadow-[0_4px_14px_0_rgba(0,0,0,0.4)]' 
+                    : `shadow-[4px_4px_12px_${primaryColor}30,inset_0px_4px_6px_rgba(255,255,255,0.8)]`} bg-gradient-to-br from-white/40 to-transparent backdrop-blur-sm`,
+                section: `bg-transparent`,
+                container: '' // Handled by inline styles in App.tsx
             };
         case 'brutal':
             return {
@@ -74,22 +92,23 @@ interface PreviewProps {
 }
 
 export const HeaderPreview: React.FC<PreviewProps> = ({ theme }) => {
-    const classes = getPresetClasses(theme.stylePreset, theme.darkMode);
+    const classes = getPresetClasses(theme.stylePreset, theme.darkMode, theme.primaryColor);
     const isNeumorphic = theme.stylePreset === 'neumorphic';
     
     return (
         <header className={`w-full p-4 flex justify-between items-center sticky top-0 z-30 mb-8 ${classes.card}`} 
             style={{ 
                 borderRadius: theme.stylePreset === 'brutal' ? '0' : theme.borderRadius,
-                margin: theme.stylePreset === 'glass' ? '16px' : '0',
-                width: theme.stylePreset === 'glass' ? 'calc(100% - 32px)' : '100%',
+                margin: (theme.stylePreset === 'glass' || theme.stylePreset === 'macaron') ? '16px' : '0',
+                width: (theme.stylePreset === 'glass' || theme.stylePreset === 'macaron') ? 'calc(100% - 32px)' : '100%',
             }}>
             <div className="font-bold text-xl flex items-center gap-2">
                 <div className={`w-10 h-10 flex items-center justify-center ${isNeumorphic ? classes.button : 'text-white'}`} 
                     style={{ 
                         backgroundColor: isNeumorphic ? 'transparent' : theme.primaryColor, 
                         borderRadius: theme.borderRadius,
-                        color: isNeumorphic ? theme.primaryColor : 'white'
+                        color: isNeumorphic ? theme.primaryColor : 'white',
+                        boxShadow: theme.stylePreset === 'macaron' ? 'inset 2px 2px 4px rgba(255,255,255,0.4)' : undefined
                     }}>
                     <Layout size={20} />
                 </div>
@@ -114,15 +133,18 @@ export const HeaderPreview: React.FC<PreviewProps> = ({ theme }) => {
 };
 
 export const HeroPreview: React.FC<PreviewProps> = ({ theme }) => {
-    const classes = getPresetClasses(theme.stylePreset, theme.darkMode);
+    const classes = getPresetClasses(theme.stylePreset, theme.darkMode, theme.primaryColor);
     const isNeumorphic = theme.stylePreset === 'neumorphic';
+    const isMacaron = theme.stylePreset === 'macaron';
 
     return (
-        <section className={`py-12 px-6 text-center flex flex-col items-center gap-6 relative z-10 ${theme.stylePreset !== 'glass' && theme.stylePreset !== 'clay' ? classes.section : ''}`}>
+        <section className={`py-12 px-6 text-center flex flex-col items-center gap-6 relative z-10 ${theme.stylePreset !== 'glass' && theme.stylePreset !== 'clay' && !isMacaron ? classes.section : ''}`}>
             <span className={`px-4 py-1.5 text-xs font-bold tracking-wider uppercase opacity-80 rounded-full ${classes.card}`} style={{ borderRadius: '99px' }}>
                 v3.0 Mobile First
             </span>
-            <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight max-w-3xl leading-[1.1]">
+            <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight max-w-3xl leading-[1.1]"
+                style={isMacaron ? { textShadow: '2px 2px 0px rgba(255,255,255,0.5)' } : {}}
+            >
                 Design <span style={{ color: theme.primaryColor }}>Anything</span>
             </h1>
             <p className="text-lg opacity-70 max-w-xl mx-auto leading-relaxed">
@@ -143,19 +165,32 @@ export const HeroPreview: React.FC<PreviewProps> = ({ theme }) => {
                     className={`px-8 py-4 font-bold text-lg border flex justify-center items-center gap-2 ${classes.button}`}
                     style={{ 
                         borderRadius: theme.borderRadius,
-                        borderColor: isNeumorphic ? 'transparent' : (theme.darkMode ? '#333' : '#ddd'),
-                        color: isNeumorphic ? theme.primaryColor : 'inherit'
+                        borderColor: isNeumorphic ? 'transparent' : (theme.darkMode ? '#333' : isMacaron ? 'rgba(255,255,255,0.8)' : '#ddd'),
+                        color: isNeumorphic ? theme.primaryColor : 'inherit',
+                        backgroundColor: isMacaron ? 'rgba(255,255,255,0.5)' : undefined
                     }}
                 >
                     <Activity size={20} /> Demo
                 </button>
             </div>
             
-            {/* Visual Flair for Glassmorphism */}
-            {theme.stylePreset === 'glass' && (
+            {/* Visual Flair for Glassmorphism & Macaron */}
+            {(theme.stylePreset === 'glass' || theme.stylePreset === 'macaron') && (
                 <>
-                    <div className="absolute top-10 left-10 w-32 h-32 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse"></div>
-                    <div className="absolute bottom-10 right-10 w-32 h-32 bg-yellow-500 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse"></div>
+                    <div 
+                        className="absolute top-10 left-10 w-32 h-32 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse"
+                        style={{ backgroundColor: theme.stylePreset === 'macaron' ? theme.primaryColor : '#c084fc' }}
+                    ></div>
+                    <div 
+                        className="absolute bottom-10 right-10 w-32 h-32 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse"
+                        style={{ backgroundColor: theme.stylePreset === 'macaron' ? '#FFB6C1' : '#facc15' }}
+                    ></div>
+                    {theme.stylePreset === 'macaron' && (
+                        <div 
+                            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full mix-blend-multiply filter blur-3xl opacity-20"
+                            style={{ backgroundColor: '#E0FFFF' }}
+                        ></div>
+                    )}
                 </>
             )}
         </section>
@@ -163,7 +198,7 @@ export const HeroPreview: React.FC<PreviewProps> = ({ theme }) => {
 };
 
 export const FeaturesPreview: React.FC<PreviewProps> = ({ theme }) => {
-    const classes = getPresetClasses(theme.stylePreset, theme.darkMode);
+    const classes = getPresetClasses(theme.stylePreset, theme.darkMode, theme.primaryColor);
     const features = [
         { icon: <Zap />, title: "Fast", desc: "Instant load times." },
         { icon: <Shield />, title: "Secure", desc: "Bank-grade security." },
@@ -174,7 +209,7 @@ export const FeaturesPreview: React.FC<PreviewProps> = ({ theme }) => {
     const isNeumorphic = theme.stylePreset === 'neumorphic';
 
     return (
-        <section className={`py-16 px-6 ${theme.stylePreset !== 'glass' && theme.stylePreset !== 'clay' ? classes.section : ''}`}>
+        <section className={`py-16 px-6 ${theme.stylePreset !== 'glass' && theme.stylePreset !== 'clay' && theme.stylePreset !== 'macaron' ? classes.section : ''}`}>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 max-w-6xl mx-auto">
                 {features.map((f, i) => (
                     <motion.div 
@@ -203,11 +238,11 @@ export const FeaturesPreview: React.FC<PreviewProps> = ({ theme }) => {
 };
 
 export const PricingPreview: React.FC<PreviewProps> = ({ theme }) => {
-    const classes = getPresetClasses(theme.stylePreset, theme.darkMode);
+    const classes = getPresetClasses(theme.stylePreset, theme.darkMode, theme.primaryColor);
     const isNeumorphic = theme.stylePreset === 'neumorphic';
     
     return (
-        <section className={`py-20 px-6 ${theme.stylePreset !== 'glass' && theme.stylePreset !== 'clay' ? classes.section : ''}`}>
+        <section className={`py-20 px-6 ${theme.stylePreset !== 'glass' && theme.stylePreset !== 'clay' && theme.stylePreset !== 'macaron' ? classes.section : ''}`}>
             <div className="max-w-md mx-auto relative group">
                 <div className={`p-8 flex flex-col gap-6 relative z-10 ${classes.card}`} 
                     style={{ 
@@ -263,9 +298,9 @@ export const PricingPreview: React.FC<PreviewProps> = ({ theme }) => {
 };
 
 export const FooterPreview: React.FC<PreviewProps> = ({ theme }) => {
-    const classes = getPresetClasses(theme.stylePreset, theme.darkMode);
+    const classes = getPresetClasses(theme.stylePreset, theme.darkMode, theme.primaryColor);
     return (
-        <footer className={`py-12 px-6 mt-auto ${theme.stylePreset !== 'glass' ? classes.card : ''} ${theme.stylePreset === 'glass' ? 'bg-black/10 backdrop-blur-md' : ''}`}>
+        <footer className={`py-12 px-6 mt-auto ${theme.stylePreset !== 'glass' && theme.stylePreset !== 'macaron' ? classes.card : ''} ${(theme.stylePreset === 'glass' || theme.stylePreset === 'macaron') ? 'bg-black/5 backdrop-blur-md' : ''}`}>
             <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
                 <div className="font-bold text-xl flex items-center gap-2">
                     <Layout size={24} className="opacity-50" />

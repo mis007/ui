@@ -1,4 +1,4 @@
-export type ThemeStyle = 'modern' | 'glass' | 'brutal' | 'ios' | 'clay' | 'material' | 'neumorphic';
+export type ThemeStyle = 'modern' | 'glass' | 'brutal' | 'ios' | 'clay' | 'material' | 'neumorphic' | 'macaron';
 
 export interface ThemeConfig {
   primaryColor: string;

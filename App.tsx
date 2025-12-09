@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ThemeConfig, ComponentItem, ThemeStyle } from './types';
 import { generateSiteCode, autoConfigureTheme } from './services/geminiService';
 import { HeaderPreview, HeroPreview, FeaturesPreview, FooterPreview, PricingPreview } from './components/PreviewComponents';
@@ -21,7 +21,12 @@ import {
     Layout,
     Box,
     Layers,
-    Droplet
+    Droplet,
+    Upload,
+    FileJson,
+    ClipboardPaste,
+    Sparkles,
+    Cookie
 } from 'lucide-react';
 
 // --- Constants & Helpers ---
@@ -47,10 +52,58 @@ const STYLE_PRESETS: { id: ThemeStyle; label: string; icon: React.ReactNode }[] 
     { id: 'material', label: 'Google', icon: <Layers size={14} /> },
     { id: 'ios', label: 'iOS', icon: <Smartphone size={14} /> },
     { id: 'clay', label: 'Clay', icon: <Box size={14} /> },
+    { id: 'macaron', label: 'Macaron', icon: <Cookie size={14} /> },
     { id: 'neumorphic', label: 'Soft UI', icon: <Box size={14} /> },
     { id: 'glass', label: 'Glass', icon: <Droplet size={14} /> },
     { id: 'brutal', label: 'Brutal', icon: <Settings size={14} /> },
 ];
+
+// --- Color Utilities ---
+
+function hexToHSL(hex: string): { h: number, s: number, l: number } {
+    let r = 0, g = 0, b = 0;
+    // Handle short #fff
+    if (hex.length === 4) {
+        r = parseInt("0x" + hex[1] + hex[1]);
+        g = parseInt("0x" + hex[2] + hex[2]);
+        b = parseInt("0x" + hex[3] + hex[3]);
+    } else {
+        r = parseInt("0x" + hex[1] + hex[2]);
+        g = parseInt("0x" + hex[3] + hex[4]);
+        b = parseInt("0x" + hex[5] + hex[6]);
+    }
+    r /= 255; g /= 255; b /= 255;
+    let cmin = Math.min(r,g,b), cmax = Math.max(r,g,b), delta = cmax - cmin;
+    let h = 0, s = 0, l = 0;
+
+    if (delta === 0) h = 0;
+    else if (cmax === r) h = ((g - b) / delta) % 6;
+    else if (cmax === g) h = (b - r) / delta + 2;
+    else h = (r - g) / delta + 4;
+
+    h = Math.round(h * 60);
+    if (h < 0) h += 360;
+
+    l = (cmax + cmin) / 2;
+    s = delta === 0 ? 0 : delta / (1 - Math.abs(2 * l - 1));
+    s = +(s * 100).toFixed(1);
+    l = +(l * 100).toFixed(1);
+
+    return { h, s, l };
+}
+
+// Generate a color shifted by degrees on the hue wheel
+const getShiftedColor = (hex: string, degree: number, lighten: number = 0) => {
+    try {
+        const { h, s, l } = hexToHSL(hex);
+        const newH = (h + degree) % 360;
+        // Ensure it stays pastel/light for backgrounds
+        const newL = Math.min(Math.max(l + lighten, 85), 98); 
+        return `hsl(${newH}, ${s}%, ${newL}%)`;
+    } catch (e) {
+        return hex;
+    }
+}
 
 // --- Main Component ---
 
@@ -76,6 +129,8 @@ export default function App() {
     const [isGenerating, setIsGenerating] = useState(false);
     const [promptInput, setPromptInput] = useState('');
     const [isAutoConfiguring, setIsAutoConfiguring] = useState(false);
+    
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Apply global theme classes
     useEffect(() => {
@@ -161,6 +216,51 @@ export default function App() {
         setLayout(layout.filter(item => item.id !== id));
     };
 
+    // --- Import / Export ---
+
+    const handleExport = () => {
+        const data = JSON.stringify({ theme, layout }, null, 2);
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `lazydev-theme-${Date.now()}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleImportClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const content = e.target?.result as string;
+                const data = JSON.parse(content);
+                if (data.theme && data.layout) {
+                    saveToHistory(); // Save state before importing
+                    setTheme(data.theme);
+                    setLayout(data.layout);
+                } else {
+                    alert('Invalid configuration file. Missing theme or layout data.');
+                }
+            } catch (err) {
+                console.error('Failed to parse file', err);
+                alert('Failed to parse file');
+            }
+        };
+        reader.readAsText(file);
+        // Reset input to allow selecting same file again
+        event.target.value = '';
+    };
+
     // --- Actions ---
 
     const handleAutoConfig = async () => {
@@ -198,11 +298,17 @@ export default function App() {
         setIsGenerating(false);
     };
 
+    const handlePasteExample = () => {
+        setPromptInput(".btn { background: #6366f1; border-radius: 20px; box-shadow: 5px 5px 10px #bebebe, -5px -5px 10px #ffffff; }");
+    };
+
     // --- Helper to get Preview Container Background ---
     const getPreviewBackgroundClass = () => {
         const isDark = theme.darkMode;
         switch (theme.stylePreset) {
             case 'clay': return isDark ? 'bg-[#2a2a2a]' : 'bg-[#f0f4f8]';
+            // For Macaron, we will use inline style for complex gradients, but return base color here
+            case 'macaron': return isDark ? 'bg-[#1a1a1a]' : 'bg-[#fffcf8]';
             case 'neumorphic': return isDark ? 'bg-[#2b2b2b]' : 'bg-[#e0e5ec]';
             case 'glass': return isDark ? 'bg-gradient-to-br from-gray-900 via-indigo-900 to-black' : 'bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100';
             case 'brutal': return isDark ? 'bg-zinc-950' : 'bg-yellow-50';
@@ -210,6 +316,30 @@ export default function App() {
             case 'material': return isDark ? 'bg-[#121212]' : 'bg-gray-100';
             default: return isDark ? 'bg-gray-950' : 'bg-white';
         }
+    };
+
+    // Generates a professional designer-style diffusion background based on primary color
+    const getMacaronBackgroundStyle = () => {
+        if (theme.darkMode) return {};
+        
+        const primary = theme.primaryColor;
+        // Generate Analogous palette (neighbors on color wheel) for smooth diffusion
+        const color1 = getShiftedColor(primary, -30, 10); // Left neighbor
+        const color2 = getShiftedColor(primary, 30, 10);  // Right neighbor
+        const color3 = getShiftedColor(primary, 0, 40);   // Very light version of primary
+        
+        return {
+            backgroundImage: `
+                radial-gradient(at 10% 10%, ${color1} 0px, transparent 50%),
+                radial-gradient(at 90% 0%, ${color2} 0px, transparent 50%),
+                radial-gradient(at 20% 80%, ${color2} 0px, transparent 50%),
+                radial-gradient(at 80% 80%, ${color1} 0px, transparent 50%),
+                radial-gradient(at 50% 50%, ${color3} 0px, transparent 70%),
+                linear-gradient(to bottom right, #fff, #fdfbff)
+            `,
+            backgroundAttachment: 'fixed',
+            backgroundSize: '100% 100%'
+        };
     };
 
     // Render Component based on type
@@ -234,10 +364,31 @@ export default function App() {
                         <Wand2 className="text-primary" /> LazyDev UI
                     </h1>
                     <div className="flex items-center gap-1">
-                        <button onClick={undo} disabled={history.past.length === 0} className="p-2 rounded hover:bg-muted text-muted-foreground disabled:opacity-30 transition-opacity"><Undo size={18} /></button>
-                        <button onClick={redo} disabled={history.future.length === 0} className="p-2 rounded hover:bg-muted text-muted-foreground disabled:opacity-30 transition-opacity"><Redo size={18} /></button>
+                        {/* Import/Export */}
+                        <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            onChange={handleFileImport} 
+                            className="hidden" 
+                            accept=".json" 
+                        />
+                        <button onClick={handleImportClick} className="p-2 rounded hover:bg-muted text-muted-foreground transition-opacity" title="Import Config">
+                            <Upload size={18} />
+                        </button>
+                        <button onClick={handleExport} className="p-2 rounded hover:bg-muted text-muted-foreground transition-opacity" title="Export Config">
+                            <Download size={18} />
+                        </button>
+                        
                         <div className="w-px h-4 bg-border mx-1"></div>
-                        <button onClick={() => updateTheme({ darkMode: !theme.darkMode })} className="p-2 rounded hover:bg-muted text-muted-foreground">{theme.darkMode ? <Moon size={18} /> : <Sun size={18} />}</button>
+                        
+                        {/* History */}
+                        <button onClick={undo} disabled={history.past.length === 0} className="p-2 rounded hover:bg-muted text-muted-foreground disabled:opacity-30 transition-opacity" title="Undo"><Undo size={18} /></button>
+                        <button onClick={redo} disabled={history.future.length === 0} className="p-2 rounded hover:bg-muted text-muted-foreground disabled:opacity-30 transition-opacity" title="Redo"><Redo size={18} /></button>
+                        
+                        <div className="w-px h-4 bg-border mx-1"></div>
+                        
+                        {/* Dark Mode */}
+                        <button onClick={() => updateTheme({ darkMode: !theme.darkMode })} className="p-2 rounded hover:bg-muted text-muted-foreground" title="Toggle Dark Mode">{theme.darkMode ? <Moon size={18} /> : <Sun size={18} />}</button>
                     </div>
                 </div>
 
@@ -245,18 +396,31 @@ export default function App() {
                     
                     {/* Magic Input */}
                     <div className="space-y-2">
-                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">AI Auto-Designer</label>
-                        <div className="flex gap-2">
-                            <input 
-                                type="text" 
-                                placeholder="e.g., 'Cute pet shop clay style'"
-                                className="flex-1 px-3 py-2 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                        <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                                <Sparkles size={12} /> AI Designer
+                            </label>
+                            <button onClick={handlePasteExample} className="text-[10px] text-primary hover:underline flex items-center gap-1">
+                                Try Code Paste
+                            </button>
+                        </div>
+                        <div className="relative">
+                            <textarea 
+                                placeholder="Describe a style (e.g. 'Cyberpunk') OR paste CSS code from uiverse.io to match."
+                                className="w-full h-24 px-3 py-2 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring resize-none"
                                 value={promptInput}
                                 onChange={(e) => setPromptInput(e.target.value)}
                             />
-                            <button onClick={handleAutoConfig} disabled={isAutoConfiguring} className="bg-primary text-primary-foreground p-2 rounded-md hover:opacity-90 disabled:opacity-50">
-                                {isAutoConfiguring ? <Loader2 className="animate-spin" size={18} /> : <Wand2 size={18} />}
-                            </button>
+                            <div className="absolute bottom-2 right-2 flex gap-1">
+                                <button 
+                                    onClick={handleAutoConfig}
+                                    disabled={isAutoConfiguring || !promptInput.trim()}
+                                    className="bg-primary text-primary-foreground p-2 rounded-md hover:opacity-90 disabled:opacity-50 shadow-sm"
+                                    title="Generate Theme"
+                                >
+                                    {isAutoConfiguring ? <Loader2 className="animate-spin" size={16} /> : <Wand2 size={16} />}
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -394,7 +558,10 @@ export default function App() {
                         >
                             {/* Inner Preview Content */}
                             <div className={`w-full h-full ${previewMode === 'mobile' ? 'rounded-[32px] overflow-hidden' : ''}`}>
-                                <div className={`min-h-full transition-colors duration-500 ${getPreviewBackgroundClass()} ${theme.darkMode ? 'text-white' : 'text-gray-900'}`}>
+                                <div 
+                                    className={`min-h-full transition-colors duration-500 ${getPreviewBackgroundClass()} ${theme.darkMode ? 'text-white' : 'text-gray-900'}`}
+                                    style={theme.stylePreset === 'macaron' ? getMacaronBackgroundStyle() : {}}
+                                >
                                     {layout.map((item) => renderComponent(item))}
                                     {layout.length === 0 && (
                                         <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-50">

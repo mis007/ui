@@ -25,6 +25,7 @@ export const generateSiteCode = async (
     - Components to include: ${componentList}
     
     Style Guides:
+    - 'macaron': Use glossy/jelly aesthetic. High border-radius (rounded-2xl/3xl), white borders with transparency (border-white/50), backdrop-blur, and strong inset highlights to create a moist/shiny look. Use pastel radial gradients for backgrounds (bg-gradient-to-tr from-pink-100 to-blue-100).
     - 'clay': Use soft pastel background colors, large border-radius (rounded-2xl/3xl), and two inner shadows (light top-left, dark bottom-right) to create a puffy 3D clay effect.
     - 'neumorphic': Use a specific off-white or dark gray background. Elements should have no borders but use two shadows: a light one (top-left) and a dark one (bottom-right) to appear extruded.
     - 'glass': Use backdrop-filter: blur, bg-opacity, and white/translucent borders. Ensure the background has a gradient or pattern so the glass effect is visible.
@@ -61,10 +62,31 @@ export const autoConfigureTheme = async (description: string): Promise<Partial<T
     const ai = getGeminiClient();
     
     const sysInstruction = `
-    You are a UI/UX expert. Based on a user's description of a website, suggest the best theme configuration.
+    You are a UI/UX expert. The user will provide a description OR paste a snippet of CSS/HTML code (e.g. from CodePen or uiverse.io).
+    Your task is to analyze the input and extract the best matching theme configuration.
+    
     Return a JSON object ONLY. 
     
-    Possible Presets: "modern", "glass", "brutal", "ios", "clay", "material", "neumorphic"
+    Possible Presets: "modern", "glass", "brutal", "ios", "clay", "material", "neumorphic", "macaron"
+    
+    Logic:
+    1. **Color Extraction**: Identify the dominant/primary color. If CSS variables (e.g., --primary, --main-color) are present, use those values.
+    2. **Radius Extraction**: Look for 'border-radius'. 
+       - 0px -> '0px'
+       - 1-6px -> '4px'
+       - 8-12px -> '8px'
+       - 16-24px -> '16px'
+       - >24px -> '24px' (or '99px' if it looks like a pill).
+    3. **Style Preset Detection**:
+       - 'jelly', 'glossy', 'macaron', 'cute', 'moist' -> 'macaron'
+       - 'backdrop-filter', 'blur', 'glass' -> 'glass'
+       - Multiple 'box-shadow' (light & dark), 'neumorphism' -> 'neumorphic'
+       - 'inset' shadows, 'clay' -> 'clay'
+       - 'border: 2px solid black', 'box-shadow: 4px 4px 0px' -> 'brutal'
+       - 'apple', 'ios', 'system-ui' -> 'ios'
+       - 'material', 'elevation', 'md-' -> 'material'
+       - Default -> 'modern'
+    4. **Dark Mode**: Check for 'background-color: #000', 'bg-slate-900', or dark hex codes.
     
     Schema:
     {
@@ -76,10 +98,8 @@ export const autoConfigureTheme = async (description: string): Promise<Partial<T
     }
     
     Examples:
-    - "Soft cute pet store" -> preset: "clay", radius: "24px", color: pastel pink/blue
-    - "Clean tech startup" -> preset: "modern" or "ios"
-    - "Futuristic dashboard" -> preset: "glass", dark: true
-    - "Tactile control panel" -> preset: "neumorphic"
+    - Input: ".btn { background: #ff0055; border-radius: 30px; box-shadow: 5px 5px 0px black; border: 2px solid black; }"
+      -> {"primaryColor": "#ff0055", "borderRadius": "99px", "stylePreset": "brutal", "darkMode": false}
     `;
 
     try {
