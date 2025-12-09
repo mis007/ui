@@ -1,0 +1,5 @@
+{
+  "name": "LazyDev UI Builder",
+  "description": "A visual, DIY frontend framework builder that generates React + Tailwind code with AI assistance. Customize themes, colors, and layout instantly.",
+  "requestFramePermissions": []
+}
